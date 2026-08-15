@@ -8,3 +8,4 @@ opencv-python-headless
 pyyaml
 draccus
 datasets
+gymnasium
