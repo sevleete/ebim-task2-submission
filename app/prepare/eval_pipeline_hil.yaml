@@ -1,0 +1,77 @@
+# ============================================================================
+# Task2 端到端 eval pipeline 配置 —— 所有可调参数都在这里,改完保存即生效。
+# eval_prepare.py --config <此文件> 读取;缺省项回落到脚本内置默认。
+# 流程:导航到 fixpos(并发升柱)→ 停稳钉底盘 → 摆预抓取姿 → 模型推理 → 回 home
+# ============================================================================
+
+# ---- 用哪个模型(右臂8:act8 | dp8 | pi)+ 连哪个 server ----
+model:
+  type: pi            # act8 | dp8 | pi(都用 ros_rollout_client_act8.py 客户端)
+  host: 127.0.0.1     # server 地址(远端 server 先建 SSH 隧道到本地)
+  port: 5557          # act8=5555 dp8=5556 pi=5557/5558(按你 server 实际端口)
+  exec_horizon: 36    # 每块执行几步再重查;pi 常用 36,act8 常用 50,dp8 用 1
+  blend: 10           # 块边界软接续步数(dp8 建议 0)
+
+# ---- 目标泊车位姿(fixpos,数据集采集位姿)----
+fixpos:
+  x: 2.1
+  y: 3.05
+  yaw_deg: -90.0
+
+# ---- 导航时并发升柱 ----
+spine:
+  target: 0.5         # 升降柱目标高度(数据首帧脊柱高)
+  timeout: 20.0       # 到位验证上限(s),超时也不阻塞
+
+# ---- 开车(BaseDriver:legs 分段连续控制 + 末端脉冲微调)----
+drive:
+  via: "4.4,3.0; 2.1,3.0"   # 途经点 "x1,y1; x2,y2";空串=直奔 fixpos
+  via_tol: 0.15
+  pos_tol: 0.02             # 最终点位置容差
+  yaw_tol_deg: 1.0
+  settle: 15                # 最终点连续稳定拍数
+  rate: 30.0                # 控制频率 Hz
+  timeout: 180.0            # 开车总超时
+  stuck: 5.0
+  kick_after: 1.0
+  kick_v: 0.30
+  max_v: 0.4
+  max_w: 0.8
+  min_v: 0.10
+  kp: 0.8
+  kp_yaw: 1.5
+  a_max: 0.3
+  pulse: true               # 末端脉冲微调(false=退回纯连续控制)
+  pulse_radius: 0.10
+  pulse_tol: 0.005
+  pulse_accept: 0.05        # 收敛不动但残差在此内就放行,超了 FAILED
+  pulse_v: 0.20
+  pulse_push_timeout: 3.0
+  pulse_cut_frac: 0.4
+  pulse_coast: 0.5
+  pulse_align: 0.5
+  pulse_align_v: 0.02
+
+# ---- 停稳后钉底盘(P + 脉冲,贯穿推理到回 home)----
+hold:
+  no_pulse: false           # eval 建议开脉冲(收敛 ≤1cm);采数一致性才关
+  pulse_trigger: 0.010      # 误差超此且静止触发脉冲纠偏(m)
+
+# ---- 双臂(摆预抓取姿 + 回 home;home=R键 ready 姿,值在 utils/robot.py)----
+arms:
+  max_vel: 0.4              # 关节插值限速 rad/s
+  settle_s: 6.0             # 到位后保持并等收敛
+  settle_tol: 0.02
+
+# ---- 结束判定(纯夹爪:闭合过→张开3仿真秒;不依赖真值话题)----
+done:
+  timeout_s: 120.0          # 推理总超时(仿真秒),兜底强制退场
+end:
+  grip_confirm_s: 3.0       # 抓取后夹爪张开持续多久判结束(仿真秒)
+  back_m: 0.10              # 退场底盘后退距离(m)
+home_on_done: true          # 退场:双臂回预抓取姿 + 底盘后退(false=原地停)
+
+# ---- 环境/路径(换机子时改这里)----
+env:
+  sev_env: /home/gq/WorkSpace/challenge/EBiM/benchmark/sev/env
+  rollout_client: /home/gq/WorkSpace/challenge/EBiM/benchmark/sev/task2/hil/eval_hil_client.py

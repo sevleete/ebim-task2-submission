@@ -1,0 +1,10 @@
+transformers>=5.0
+safetensors
+huggingface_hub
+numpy
+einops
+pillow
+opencv-python-headless
+pyyaml
+draccus
+datasets
