@@ -55,7 +55,7 @@ drive:
 # ---- 停稳后钉底盘(P + 脉冲,贯穿推理到回 home)----
 hold:
   no_pulse: false           # eval 建议开脉冲(收敛 ≤1cm);采数一致性才关
-  pulse_trigger: 0.010      # 误差超此且静止触发脉冲纠偏(m)
+  pulse_trigger: 0.03      # 误差超此且静止触发脉冲纠偏(m)
 
 # ---- 双臂(摆预抓取姿 + 回 home;home=R键 ready 姿,值在 utils/robot.py)----
 arms:
