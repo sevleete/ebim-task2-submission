@@ -98,7 +98,7 @@ class BaseHold:
 
         # 温和 P 兜底(低增益防振荡)
         vx_cmd = vy_cmd = wz_cmd = 0.0
-        if dist > 0.03:
+        if dist > 0.004:
             vx_cmd = max(-0.2, min(0.2, 1.5 * ex))
             vy_cmd = max(-0.2, min(0.2, 1.5 * ey))
         if abs(eyaw) > 0.005:
