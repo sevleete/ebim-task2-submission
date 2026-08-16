@@ -13,24 +13,36 @@ RUN apt-get update && apt-get install -y curl gnupg lsb-release && \
     apt-get update && apt-get install -y ros-jazzy-ros-base python3-pip ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
-# --- Python deps (torch cu128 + inference stack) ---
 # PIP_PROXY is optional (speeds up builds behind restricted networks); leave unset normally.
 ARG PIP_PROXY=""
-COPY requirements.txt /tmp/requirements.txt
+
+# --- torch cu128 FIRST (heavy, stable; kept in its own cached layer so that editing
+#     requirements.txt below never triggers a torch re-download). cu128 wheels ship
+#     sm_120 kernels -> covers Ada (4090) through Blackwell (5090 / RTX PRO 6000). ---
 RUN http_proxy=$PIP_PROXY https_proxy=$PIP_PROXY \
     pip3 install --break-system-packages --no-cache-dir --retries 5 \
       torch torchvision --index-url https://download.pytorch.org/whl/cu128
-# --ignore-installed: the ROS apt layer ships debian-packaged numpy/etc without RECORD
-# files, which pip cannot uninstall; install fresh copies on top instead.
+
+# --- inference stack (pinned to the versions verified against this pi0.5 checkpoint;
+#     transformers 5.5.4 in particular — newer transformers changed create_causal_mask()).
+#     --ignore-installed: the ROS apt layer ships debian numpy/etc without RECORD files,
+#     which pip cannot uninstall; install fresh copies on top instead. ---
+COPY requirements.txt /tmp/requirements.txt
 RUN http_proxy=$PIP_PROXY https_proxy=$PIP_PROXY \
     pip3 install --break-system-packages --no-cache-dir --retries 5 --ignore-installed \
       -r /tmp/requirements.txt
 
-# --- App code (pipeline + servers + vendored lerobot subset) + residual head ---
+# --- pre-bake the residual-corrector backbone (DINOv2-S, public ~90MB) so the
+#     container needs no internet for it at eval time ---
+RUN http_proxy=$PIP_PROXY https_proxy=$PIP_PROXY \
+    python3 -c "from huggingface_hub import snapshot_download; snapshot_download('facebook/dinov2-small')"
+
+# --- app code (pipeline + servers + vendored lerobot subset) + residual head ---
 COPY app /app
 COPY weights/residual_head.pt /app/weights/residual_head.pt
 COPY entrypoint.sh /entrypoint.sh
 ENV PYTHONPATH=/app/vendor
+ENV PI_HF_REPO=Sevleete/ebim-task2-final
 # pi0.5 weights are pulled on first run from HF into /weights (mount a volume to cache):
 #   -e PI_HF_REPO=<team>/ebim-task2-pi05  -v $HOME/ebim_weights:/weights
 VOLUME /weights

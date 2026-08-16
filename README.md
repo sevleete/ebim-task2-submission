@@ -25,7 +25,7 @@ docker run --rm --gpus all --network host --ipc host \
 
 - Requires one NVIDIA GPU (≥ 16 GB).
 - Model weights are fetched automatically on first run from
-  <https://huggingface.co/Sevleete/ebim-task2-dagger-hil> into the mounted `/weights`
+  <https://huggingface.co/Sevleete/ebim-task2-final> into the mounted `/weights`
   volume (cached across runs). No manual steps needed.
 - The container waits for `/isaac/odom`, runs one full episode autonomously
   (navigate → operate → retreat to clear the eval camera), and exits.

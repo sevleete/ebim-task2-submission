@@ -2,7 +2,7 @@
 """首次运行时下载权重到 /weights(挂卷可跨容器缓存)。"""
 import os
 from huggingface_hub import snapshot_download
-PI_REPO = os.environ.get("PI_HF_REPO", "REPLACE_ME/ebim-task2-pi05")
+PI_REPO = os.environ.get("PI_HF_REPO", "Sevleete/ebim-task2-final")
 W = "/weights/pi05"
 if not os.path.exists(os.path.join(W, "model.safetensors")):
     print(f"[weights] downloading {PI_REPO} -> {W}", flush=True)

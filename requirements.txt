@@ -1,6 +1,4 @@
-transformers>=5.0
 safetensors
-huggingface_hub
 numpy
 einops
 pillow
@@ -9,3 +7,6 @@ pyyaml
 draccus
 datasets
 gymnasium
+transformers==5.5.4
+tokenizers==0.22.2
+huggingface_hub==1.27.0
