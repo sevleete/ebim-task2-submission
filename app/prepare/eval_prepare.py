@@ -190,20 +190,30 @@ def run_pipeline(cfg: dict) -> int:
                    settle_tol=cfg["arms"]["settle_tol"], logger=log)
 
     # --- 阶段4:起 client 子进程,推理;监测放置完成 / Ctrl-C ---
+    # 推理期脉冲保留(P 推不动静摩擦,偏远了必须靠脉冲拉回),但触发阈值放大:
+    # 3cm 内不脉冲(策略训练时底盘本有±2cm随机,吃得住),超 3cm 才纠偏,避免抓取期频繁猛推。
+    hold.pulse_trigger = float(cfg["hold"].get("pulse_trigger_infer", 0.03))
+    log.info(f"推理期:hold 脉冲触发阈值 → {hold.pulse_trigger*100:.0f}cm(泊车期为 "
+             f"{cfg['hold']['pulse_trigger']*100:.0f}cm)")
     m = cfg["model"]
     client = cfg["env"]["rollout_client"]
     cmd = [sys.executable, client, "--host", str(m["host"]), "--port", str(m["port"]),
            "--rate", str(rate), "--exec-horizon", str(m["exec_horizon"]),
            "--blend", str(m["blend"])]
-    log.info(f"阶段4:起推理 client → {os.path.basename(client)} :{m['port']}")
+    # pi+残差:把残差 server 的地址/端口从配置转发给 hil 客户端(纯 pi 客户端不认这俩参数,故仅对 hil 客户端追加)
+    if "eval_hil_client" in os.path.basename(client):
+        cmd += ["--hil-host", str(m.get("hil_host", "127.0.0.1")),
+                "--hil-port", str(m.get("hil_port", 5561))]
+    log.info(f"阶段4:起推理 client → {os.path.basename(client)} :{m['port']}"
+             + (f" (hil :{m.get('hil_port', 5561)})" if 'eval_hil_client' in os.path.basename(client) else ""))
     proc = subprocess.Popen(cmd)
 
     # --- 结束判定:夹爪"闭合过(抓取)→ 再张开持续 grip_confirm_s 仿真秒" 或 超时 ---
     ec = cfg["end"]
     def _now_sim():
         return node.sim_time if node.sim_time is not None else time.time()
-    log.info("推理中… 结束=夹爪闭合过后张开%.0f仿真秒;超时=%.0f仿真秒;或 Ctrl-C"
-             % (ec["grip_confirm_s"], cfg["done"]["timeout_s"]))
+    log.info("推理中… 结束=夹爪闭合%.0f仿真秒后张开%.0f仿真秒;超时=%.0f仿真秒;或 Ctrl-C"
+             % (ec["grip_confirm_s"], ec["grip_confirm_s"], cfg["done"]["timeout_s"]))
     t_infer0 = _now_sim()
     grasped = False
     t_close = t_open = None
@@ -217,9 +227,10 @@ def run_pipeline(cfg: dict) -> int:
         if not grasped:
             if g < 0.3:
                 t_close = t_close or now
-                if now - t_close >= 0.5:
+                if now - t_close >= ec["grip_confirm_s"]:
                     grasped = True
-                    log.info(f"检测到抓取(夹爪闭合)@ sim {now - t_infer0:.1f}s")
+                    log.info(f"检测到抓取(夹爪闭合≥{ec['grip_confirm_s']:.0f}仿真秒)"
+                             f"@ sim {now - t_infer0:.1f}s")
             else:
                 t_close = None
         else:
